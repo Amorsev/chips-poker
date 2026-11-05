@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { chips } from '../lib/format';
 import { Avatar } from './Avatar';
@@ -9,11 +9,14 @@ export function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { pathname } = useLocation();
+  // The table is a full-screen game view on phones (see styles.css).
+  const isTableRoute = pathname.startsWith('/table/');
 
   if (!user) return null;
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${isTableRoute ? 'is-table-route' : ''}`}>
       <header className="topbar">
         <div className="topbar-inner">
           <button className="logo-button" onClick={() => navigate('/lobby')} aria-label="На главную">

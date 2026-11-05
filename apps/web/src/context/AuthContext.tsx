@@ -8,7 +8,6 @@ import {
   type ReactNode
 } from 'react';
 import { api } from '../lib/api';
-import { disconnectSocket } from '../lib/socket';
 import type { ProfilePayload, User } from '../types';
 
 const TOKEN_KEY = 'chips_poker_token';
@@ -97,7 +96,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
-    disconnectSocket();
+    // Loaded on demand: socket.io-client is only needed once a table is opened,
+    // and if it was never loaded there is no socket to close.
+    void import('../lib/socket').then(({ disconnectSocket }) => disconnectSocket());
     setToken(null);
     setUser(null);
   }, []);
