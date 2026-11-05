@@ -16,11 +16,10 @@ async function main(): Promise<void> {
   const app = createApp();
   const httpServer = createServer(app);
 
+  // No CORS configuration: the web client is always served from the same
+  // origin as the API (Express in the container, the Vite proxy in dev), so the
+  // site works on whatever address it is opened at.
   const io = new Server(httpServer, {
-    cors: {
-      origin: config.corsOrigins,
-      credentials: true
-    },
     transports: ['websocket', 'polling'],
     maxHttpBufferSize: 64 * 1024,
     pingInterval: 20_000,
@@ -32,7 +31,7 @@ async function main(): Promise<void> {
 
   httpServer.listen(config.PORT, () => {
     logger.info(
-      { port: config.PORT, env: config.NODE_ENV, origins: config.corsOrigins },
+      { port: config.PORT, env: config.NODE_ENV, servesWebClient: Boolean(config.webDistDir) },
       'Chips Poker API is listening'
     );
   });

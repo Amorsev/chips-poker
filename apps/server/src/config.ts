@@ -10,11 +10,21 @@ dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
  * Central, validated configuration. Failing fast at boot is much safer than
  * discovering a missing JWT secret after the first login.
  */
+/** Unset and empty (`FOO=` from docker compose) both mean "not configured". */
+const optionalString = z
+  .string()
+  .optional()
+  .transform((value) => (value && value.trim() ? value.trim() : undefined));
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
-  WEB_ORIGIN: z.string().default('http://localhost:5173'),
-  PUBLIC_WEB_URL: z.string().default('http://localhost:5173'),
+  // Optional. Password-reset links are built from the address the request came
+  // in on; set this to pin them to one public URL (recommended with SMTP).
+  PUBLIC_WEB_URL: optionalString,
+  // Optional. Directory with the built SPA (apps/web/dist). When set, the API
+  // also serves the web client, so the whole app runs on a single port.
+  WEB_DIST_DIR: optionalString,
   TRUST_PROXY: z.coerce.number().int().min(0).default(0),
   LOG_LEVEL: z.string().default('info'),
 
@@ -65,9 +75,7 @@ export const config = {
   ...env,
   isProduction: env.NODE_ENV === 'production',
   uploadDir: path.resolve(process.cwd(), env.UPLOAD_DIR),
-  // Socket.IO and Express share the same origin, but this list lets the Vite
-  // dev server talk to the API directly if desired.
-  corsOrigins: env.WEB_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
+  webDistDir: env.WEB_DIST_DIR ? path.resolve(process.cwd(), env.WEB_DIST_DIR) : null
 } as const;
 
 export type AppConfig = typeof config;

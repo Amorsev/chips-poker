@@ -17,7 +17,9 @@ export function deviceMiddleware(req: Request, res: Response, next: NextFunction
     res.cookie(COOKIE_NAME, deviceId, {
       httpOnly: true,
       sameSite: 'lax',
-      secure: config.isProduction,
+      // Only mark it Secure on HTTPS: over plain HTTP (e.g. http://<server-ip>)
+      // a Secure cookie would never be stored. Behind a TLS proxy set TRUST_PROXY.
+      secure: req.secure,
       maxAge: COOKIE_MAX_AGE,
       path: '/'
     });

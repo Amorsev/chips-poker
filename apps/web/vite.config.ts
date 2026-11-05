@@ -14,10 +14,10 @@ export default defineConfig({
     host: devHost,
     port: 5173,
     strictPort: true,
-    // Public dev tunnels (CloudPub, ngrok, etc.) send their own Host header.
-    // Leading dots allow every subdomain, so the tunnel URL can change without
-    // editing this file again.
-    allowedHosts: ['.cloudpub.ru'],
+    // Any host name may reach the dev server (tunnels such as CloudPub or ngrok,
+    // a LAN IP, a custom domain). It still only listens on 127.0.0.1 unless
+    // VITE_DEV_HOST says otherwise.
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: apiTarget,

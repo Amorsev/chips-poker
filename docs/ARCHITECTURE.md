@@ -10,18 +10,18 @@ where the limits of the current design are.
 
 ```mermaid
 flowchart LR
-  B[Browser<br/>React 18 SPA] -->|HTTPS /api| N[nginx]
-  B <-->|WSS /socket.io| N
-  N -->|/api, /uploads, /socket.io| A[API node<br/>Express + Socket.IO]
+  B[Browser<br/>React 18 SPA] -->|HTTP(S) /, /api, /uploads| A[Node app<br/>Express + Socket.IO<br/>+ web client]
+  B <-->|WS /socket.io| A
   A --> P[(PostgreSQL 16)]
   A --> R[(Redis 7)]
   A --> L[In-memory<br/>TableManager<br/>9 tables]
   A --> F[(uploads volume<br/>avatars)]
 ```
 
-- **nginx** serves the built SPA and reverse-proxies the API, uploaded avatars and
-  the WebSocket handshake. Everything is same-origin in production, which keeps
-  CORS, cookies and WebSocket upgrades simple.
+- **One container** (since 1.2.0) runs PostgreSQL, Redis and the Node app; the
+  Node app also serves the built SPA (`WEB_DIST_DIR`). Everything is same-origin,
+  so there is no CORS allow-list and the site works on any host name or IP.
+  See `Dockerfile` and `docker/entrypoint.sh`.
 - **API node** hosts Express (REST) and Socket.IO (real-time). It is stateless for
   authentication and leaderboards, and stateful only for live tables.
 - **PostgreSQL** is the source of truth for users, wallets, chip ledger, hand
@@ -279,7 +279,7 @@ handful of active tables, and state transitions measured in microseconds.
 
 | Segment | Typical |
 | --- | --- |
-| Browser → nginx → API (same region) | 5–30 ms |
+| Browser → API (same region) | 5–30 ms |
 | JWT/socket auth | < 1 ms after handshake |
 | Action validation + state transition | < 1 ms |
 | Personalised broadcast to 9 clients | 1–5 ms |

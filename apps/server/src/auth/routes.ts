@@ -192,7 +192,11 @@ authRouter.post(
         })
       ]);
 
-      const resetUrl = `${config.PUBLIC_WEB_URL.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(rawToken)}`;
+      // Built from the address the site was opened at unless PUBLIC_WEB_URL pins
+      // it. With SMTP on a public server, set PUBLIC_WEB_URL: a forged Host
+      // header could otherwise point the e-mailed link at another site.
+      const baseUrl = (config.PUBLIC_WEB_URL ?? `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+      const resetUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(rawToken)}`;
       await sendPasswordResetEmail(user.email, resetUrl);
     }
 

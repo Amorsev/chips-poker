@@ -9,7 +9,8 @@ climb the leagues.
 - **Frontend:** React 18, Vite, TypeScript, Socket.IO client.
 - **Game engine:** authoritative in-memory No-Limit Hold'em with side pots,
   under-raise rules, time banks and automatic mucking.
-- **Deployment:** one-command Docker Compose stack (PostgreSQL, Redis, API, nginx).
+- **Deployment:** one self-contained container: PostgreSQL, Redis, the API and the
+  web client run inside it, on a single port, at any host name or IP address.
 
 ---
 
@@ -69,7 +70,8 @@ it only sends intents such as "call" or "raise to 400".
   controls, two-tap raise/all-in confirmation, installable PWA with an offline page.
 - Rate limiting, Helmet, CORS allow-list, Zod validation on every endpoint and
   socket event, device fingerprinting for multi-account abuse.
-- Docker Compose deployment with automatic Prisma migrations and nginx reverse proxy.
+- Single-container deployment (PostgreSQL, Redis, API and web client inside one
+  image) with automatic Prisma migrations and generated secrets.
 
 ## Leagues and tables
 
@@ -105,10 +107,9 @@ poker/
 │   │   │   ├── realtime/        # Socket.IO gateway
 │   │   │   ├── utils/           # serialization, crypto helpers
 │   │   │   ├── app.ts           # Express composition
+│   │   │   ├── web-client.ts    # serves the built SPA from the API
 │   │   │   ├── config.ts        # validated environment
 │   │   │   └── index.ts         # HTTP + Socket.IO bootstrap
-│   │   ├── Dockerfile
-│   │   └── docker-entrypoint.sh
 │   └── web/                     # React SPA
 │       ├── src/
 │       │   ├── pages/           # auth, lobby, table, profile, leaderboard
@@ -116,12 +117,14 @@ poker/
 │       │   ├── context/         # auth + toast providers
 │       │   ├── lib/             # API client, socket, formatting
 │       │   └── styles.css       # responsive emerald/gold theme
-│       ├── nginx.conf
-│       └── Dockerfile
+│       └── public/              # PWA manifest, icons, service worker
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   └── API.md
-├── docker-compose.yml
+├── docker/
+│   └── entrypoint.sh            # starts PostgreSQL, Redis and the app
+├── Dockerfile                   # all-in-one image
+├── docker-compose.yml           # one service + one data volume
 ├── start.ps1                    # Windows one-command local launcher
 ├── .env.example
 └── package.json                 # npm workspaces + root scripts
@@ -142,11 +145,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\start.ps1
 
 Open <http://localhost:5173>. The site keeps running until you press `Ctrl+C`.
 
-To expose the same dev server through a CloudPub tunnel, start the tunnel
-against `http://localhost:5173`. Vite already allows `*.cloudpub.ru`, and
-`start.ps1` includes `dimitrius.cloudpub.ru` in the API's allowed origins. If
-the tunnel uses another domain, add it to `server.allowedHosts` in
-`apps/web/vite.config.ts` and to `WEB_ORIGIN` in `start.ps1`.
+To expose the dev server through a tunnel (CloudPub, ngrok and so on), point
+the tunnel at `http://localhost:5173`. No origin list has to be maintained: the
+Vite dev server accepts any host name and the API has no CORS allow-list,
+because the browser always reaches it through the same origin.
 
 ### Prerequisites
 
@@ -198,7 +200,7 @@ npm run dev
 Vite proxies `/api`, `/uploads` and `/socket.io` to the API, so no CORS setup
 is needed in development. The dev server listens on `127.0.0.1` (IPv6 loopback
 is refused on some Windows machines). To open it from a phone on the same Wi-Fi,
-start it with `VITE_DEV_HOST=0.0.0.0` and add the LAN origin to `WEB_ORIGIN`.
+start it with `VITE_DEV_HOST=0.0.0.0`.
 The service worker is registered only in production builds (`npm run build`,
 then `npx vite preview` in `apps/web`).
 
@@ -214,40 +216,67 @@ then `npx vite preview` in `apps/web`).
 | `npm run db:migrate` | `prisma migrate dev` |
 | `npm run db:push` | Push schema without a migration |
 | `npm run db:studio` | Prisma Studio |
-| `npm run docker:up` | Build and start the full stack |
-| `npm run docker:down` | Stop the stack |
+| `npm run docker:up` | Build and start the all-in-one container |
+| `npm run docker:down` | Stop it |
 
 ## Docker deployment
 
-```bash
-# 1. Provide production secrets (at minimum JWT_SECRET and device secret).
-export JWT_SECRET="$(node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))")"
-export DEVICE_COOKIE_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))")"
-export WEB_ORIGIN="http://localhost:8080"
+The whole application is **one container**. PostgreSQL 17, Redis and the Node.js
+app (REST API, Socket.IO and the built web client) run inside it; nothing else
+has to be installed or configured. All state lives in one volume mounted at
+`/data`.
 
-# 2. Build and start PostgreSQL, Redis, the API and nginx.
-docker compose up --build
+### From a release image
+
+Each GitHub release has a ready image (`chips-poker-<version>-image-amd64.tar.gz`):
+
+```bash
+docker load -i chips-poker-1.2.0-image-amd64.tar.gz
+docker run -d --name chips-poker --restart unless-stopped   -p 8080:8080 -v chips-data:/data chips-poker:1.2.0
 ```
 
-Open <http://localhost:8080>. The API container waits for healthy PostgreSQL and
-Redis, then runs `prisma migrate deploy` automatically before starting Node.
+### From source
 
-| Service | Port | Notes |
+```bash
+docker compose up -d --build
+```
+
+Open `http://<server-address>:8080`: `localhost`, a LAN IP, a public IP or a
+domain all work, with no origin list to configure. The first start creates the
+database, generates the JWT and cookie secrets (stored in `/data/secrets`, so
+sessions survive restarts) and applies migrations.
+
+| Path in `/data` | Contents |
+| --- | --- |
+| `postgres/` | PostgreSQL cluster (Unix socket only, no TCP port) |
+| `redis/` | Redis append-only file (listens on 127.0.0.1 inside the container) |
+| `uploads/` | Avatars |
+| `secrets/` | Generated `JWT_SECRET` and `DEVICE_COOKIE_SECRET` |
+
+Optional environment variables:
+
+| Variable | Default | Purpose |
 | --- | --- | --- |
-| `web` | 8080 | nginx serves the SPA and proxies `/api`, `/uploads`, `/socket.io` |
-| `server` | 4000 | Express + Socket.IO; stores avatars in the `poker_uploads` volume |
-| `postgres` | 5432 | data in `postgres_data` |
-| `redis` | 6379 | AOF persistence in `redis_data` |
+| `PORT` | `8080` | Port inside the container |
+| `TRUST_PROXY` | `0` | Set to `1` behind a TLS reverse proxy (real client IPs, secure cookies) |
+| `PUBLIC_WEB_URL` | from request | Pins password-reset links to one URL; set it when SMTP is configured on a public server |
+| `JWT_SECRET`, `DEVICE_COOKIE_SECRET` | generated | Override the generated secrets |
+| `DATABASE_URL` | bundled PostgreSQL | Use an external PostgreSQL instead |
+| `REDIS_URL` | bundled Redis | Use an external Redis, or `off` to run without it |
+| `SMTP_*` | unset | Send password-reset e-mails (otherwise links are logged) |
 
-`WEB_ORIGIN` must match the browser-facing origin (for example
-`https://poker.example.com` behind a TLS terminator). The compose default is
-`http://localhost:8080`.
+Back up by copying the volume while the container is stopped, or with
+`docker exec chips-poker pg_dump -h /run/postgresql -U postgres poker`.
 
 To reset all data:
 
 ```bash
 docker compose down -v
 ```
+
+HTTPS: put any TLS reverse proxy (Caddy, nginx, Traefik) in front of port 8080
+and set `TRUST_PROXY=1`. Browsers only install the PWA and register its service
+worker over HTTPS (or on `localhost`).
 
 ## Tests and checks
 

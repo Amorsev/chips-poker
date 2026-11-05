@@ -1,86 +1,27 @@
+# Chips Poker as a single self-contained container: PostgreSQL, Redis, the API
+# and the web client all run inside it. All data lives in the chips_data volume.
+#
+#   docker compose up -d --build     # build from source and start
+#   open http://<this-host>:8080     # any host name or IP address works
+#
+# Optional settings (see README, "Docker deployment"):
+#   PUBLIC_WEB_URL  pin password-reset links to one public URL (use with SMTP)
+#   TRUST_PROXY=1   when a TLS reverse proxy sits in front of the container
+#   DATABASE_URL / REDIS_URL  use external servers instead of the bundled ones
 services:
-  postgres:
-    image: postgres:16-alpine
+  chips-poker:
+    build: .
+    image: chips-poker:1.2.0
     restart: unless-stopped
-    environment:
-      POSTGRES_DB: poker
-      POSTGRES_USER: poker
-      POSTGRES_PASSWORD: poker
     ports:
-      - "5432:5432"
+      - "${CHIPS_PORT:-8080}:8080"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U poker -d poker"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
-  server:
-    build:
-      context: .
-      dockerfile: apps/server/Dockerfile
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - chips_data:/data
     environment:
-      NODE_ENV: production
-      PORT: 4000
-      DATABASE_URL: postgresql://poker:poker@postgres:5432/poker?schema=public
-      REDIS_URL: redis://redis:6379
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-change-me-please}
-      JWT_EXPIRES_IN: 7d
-      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:8080}
-      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:8080}
-      WELCOME_BONUS: 10000
-      UPLOAD_DIR: /app/uploads
+      TRUST_PROXY: ${TRUST_PROXY:-0}
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-}
       ALLOW_MULTI_ACCOUNT: ${ALLOW_MULTI_ACCOUNT:-false}
-      ALLOWED_ACCOUNTS_PER_IP_24H: ${ALLOWED_ACCOUNTS_PER_IP_24H:-3}
-      TURN_TIMEOUT_MS: 20000
-      NEXT_HAND_DELAY_MS: 5000
-      RECOVER_TABLE_STAKES: ${RECOVER_TABLE_STAKES:-true}
-    volumes:
-      - poker_uploads:/app/uploads
-    ports:
-      - "4000:4000"
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-  web:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
-      args:
-        VITE_API_URL: /api
-        VITE_SOCKET_URL: ""
-    restart: unless-stopped
-    depends_on:
-      server:
-        condition: service_healthy
-    ports:
-      - "8080:80"
+    stop_grace_period: 30s
 
 volumes:
-  postgres_data:
-  redis_data:
-  poker_uploads:
+  chips_data:

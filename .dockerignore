@@ -8,3 +8,7 @@
 **/.env
 **/.env.*
 !.env.example
+.pgdata
+.pgdata.log
+.claude
+xd.txt

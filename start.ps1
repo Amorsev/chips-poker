@@ -137,7 +137,6 @@ try {
 
 # --- Start the app -----------------------------------------------------------
 $env:PORT = '4000'
-$env:WEB_ORIGIN = 'http://localhost:5173,https://dimitrius.cloudpub.ru,http://dimitrius.cloudpub.ru'
 # Redis is optional. If REDIS_URL is empty or unreachable, the API falls back
 # to an in-memory Socket.IO adapter and leaderboard cache.
 

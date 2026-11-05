@@ -1,5 +1,4 @@
 import express from 'express';
-import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
@@ -13,6 +12,7 @@ import { authRouter } from './auth/routes.js';
 import { profileRouter } from './profile/routes.js';
 import { lobbyRouter } from './lobby/routes.js';
 import { leaderboardRouter } from './leaderboard/routes.js';
+import { mountWebClient } from './web-client.js';
 
 export function createApp(): express.Express {
   const app = express();
@@ -26,15 +26,8 @@ export function createApp(): express.Express {
       crossOriginResourcePolicy: { policy: 'cross-origin' }
     })
   );
-  app.use(
-    cors({
-      origin: (origin, callback) => {
-        if (!origin || config.corsOrigins.includes(origin)) return callback(null, true);
-        callback(new Error('CORS origin denied'));
-      },
-      credentials: true
-    })
-  );
+  // No CORS middleware: the browser always talks to the API on the same origin
+  // it loaded the site from, whatever host name or IP address that is.
   app.use(
     pinoHttp({
       logger,
@@ -89,6 +82,8 @@ export function createApp(): express.Express {
   app.use('/api/profile', profileRouter);
   app.use('/api/lobby', lobbyRouter);
   app.use('/api/leaderboard', leaderboardRouter);
+
+  if (config.webDistDir) mountWebClient(app, config.webDistDir);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
