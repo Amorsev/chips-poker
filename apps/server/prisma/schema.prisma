@@ -1,0 +1,149 @@
+// Play-money only. There is deliberately no payment, purchase, cash-out or
+// transfer model in this schema: chips are non-redeemable virtual points.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum League {
+  BEGINNER
+  AMATEUR
+  PRO
+  HIGHROLLER
+}
+
+enum TransactionType {
+  WELCOME_BONUS
+  FREE_TOP_UP
+  TABLE_BUY_IN
+  TABLE_CASH_OUT
+  ADMIN_ADJUSTMENT
+}
+
+model User {
+  id                  String   @id @default(uuid()) @db.Uuid
+  email               String   @unique @db.VarChar(320)
+  passwordHash        String
+  nickname            String   @unique @db.VarChar(24)
+  // Case-insensitive uniqueness without requiring the citext extension.
+  nicknameKey         String   @unique @db.VarChar(24)
+  avatarUrl           String?  @db.VarChar(512)
+  avatarPreset        String   @default("🦊") @db.VarChar(16)
+  chips               BigInt   @default(0)
+  totalWon            BigInt   @default(0)
+  totalLost           BigInt   @default(0)
+  handsPlayed         Int      @default(0)
+  handsWon            Int      @default(0)
+  welcomeBonusClaimed Boolean  @default(false)
+  tokenVersion        Int      @default(0)
+  role                String   @default("USER") @db.VarChar(16)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  lastLoginAt         DateTime?
+  lastSeenAt          DateTime?
+
+  devices         Device[]
+  resetTokens     PasswordResetToken[]
+  transactions    ChipTransaction[]
+  handParticipants HandParticipant[]
+
+  @@index([totalWon(sort: Desc)])
+  @@index([createdAt])
+}
+
+model Device {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  fingerprint String   @db.VarChar(64)
+  ipHash      String   @db.VarChar(64)
+  userAgent   String?  @db.VarChar(512)
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, fingerprint])
+  @@index([fingerprint])
+  @@index([ipHash, firstSeenAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique @db.VarChar(64)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model ChipTransaction {
+  id           String          @id @default(uuid()) @db.Uuid
+  userId       String          @db.Uuid
+  type         TransactionType
+  amount       BigInt
+  balanceAfter BigInt
+  reference    String?         @db.VarChar(128)
+  metadata     Json?
+  createdAt    DateTime        @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model Hand {
+  id         String   @id @default(uuid()) @db.Uuid
+  tableId    String   @db.VarChar(64)
+  tableName  String   @db.VarChar(80)
+  league     League
+  handNumber Int
+  board      String   @db.VarChar(32)
+  pot        BigInt
+  startedAt  DateTime
+  endedAt    DateTime @default(now())
+
+  participants HandParticipant[]
+
+  @@index([tableId, endedAt(sort: Desc)])
+  @@index([endedAt])
+}
+
+enum HandResult {
+  WON
+  LOST
+  FOLDED
+}
+
+model HandParticipant {
+  id            String     @id @default(uuid()) @db.Uuid
+  handId        String     @db.Uuid
+  userId        String     @db.Uuid
+  seat          Int
+  startingStack BigInt
+  endingStack   BigInt
+  committed     BigInt
+  wonAmount     BigInt
+  netAmount     BigInt
+  folded        Boolean
+  holeCards     String     @db.VarChar(16)
+  bestHand      String?    @db.VarChar(64)
+  result        HandResult
+  // Denormalised for fast daily/weekly leaderboard aggregation.
+  playedAt      DateTime   @default(now())
+
+  hand Hand @relation(fields: [handId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([handId])
+  @@index([userId, playedAt(sort: Desc)])
+  @@index([playedAt, wonAmount])
+}

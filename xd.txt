@@ -1,0 +1,2 @@
+cd F:\opencode\poker
+powershell -NoProfile -ExecutionPolicy Bypass -File .\start.ps1

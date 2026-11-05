@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.pgdata/
+build/
+coverage/
+.env
+.env.*
+!.env.example
+apps/server/uploads/
+*.log
+.DS_Store
+.vscode/
+.idea/
+prisma/dev.db

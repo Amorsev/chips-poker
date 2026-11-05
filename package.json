@@ -1,0 +1,31 @@
+{
+  "name": "chips-social-poker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Social no-limit Texas Hold'em platform with play-only chips",
+  "workspaces": [
+    "apps/server",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c green,cyan \"npm run dev -w @poker/server\" \"npm run dev -w @poker/web\"",
+    "dev:stable": "concurrently -n api,web -c green,cyan \"npm run dev:once -w @poker/server\" \"npm run dev -w @poker/web\"",
+    "dev:server": "npm run dev -w @poker/server",
+    "dev:web": "npm run dev -w @poker/web",
+    "build": "npm run build -w @poker/server && npm run build -w @poker/web",
+    "test": "npm run test -w @poker/server",
+    "typecheck": "npm run typecheck -w @poker/server && npm run typecheck -w @poker/web",
+    "db:generate": "npm run prisma:generate -w @poker/server",
+    "db:migrate": "npm run prisma:migrate -w @poker/server",
+    "db:push": "npm run prisma:push -w @poker/server",
+    "db:studio": "npm run prisma:studio -w @poker/server",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=20.11"
+  }
+}

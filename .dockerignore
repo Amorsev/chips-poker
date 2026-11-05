@@ -1,0 +1,10 @@
+.git
+.gitignore
+**/node_modules
+**/dist
+**/coverage
+**/uploads
+**/*.log
+**/.env
+**/.env.*
+!.env.example
