@@ -65,6 +65,8 @@ it only sends intents such as "call" or "raise to 400".
 - Leagues with automatic progression based on lifetime chips won.
 - Top-100 leaderboards overall and per league, filtered **all time / week / today**.
 - Responsive dark casino UI with rotating seats (local player always at the bottom).
+- Phone-first table view: one-screen layout in portrait and landscape, touch-sized
+  controls, two-tap raise/all-in confirmation, installable PWA with an offline page.
 - Rate limiting, Helmet, CORS allow-list, Zod validation on every endpoint and
   socket event, device fingerprinting for multi-account abuse.
 - Docker Compose deployment with automatic Prisma migrations and nginx reverse proxy.
@@ -194,7 +196,11 @@ npm run dev
 - Health: <http://localhost:4000/api/health>
 
 Vite proxies `/api`, `/uploads` and `/socket.io` to the API, so no CORS setup
-is needed in development.
+is needed in development. The dev server listens on `127.0.0.1` (IPv6 loopback
+is refused on some Windows machines). To open it from a phone on the same Wi-Fi,
+start it with `VITE_DEV_HOST=0.0.0.0` and add the LAN origin to `WEB_ORIGIN`.
+The service worker is registered only in production builds (`npm run build`,
+then `npx vite preview` in `apps/web`).
 
 ### Root scripts
 

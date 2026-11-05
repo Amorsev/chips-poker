@@ -9,15 +9,46 @@ import type { ChatMessage, TablePlayerState, TableState } from '../types';
 import { Avatar } from '../components/Avatar';
 import { ChipMark } from '../components/Logo';
 import { PlayingCard, CardRow } from '../components/PlayingCard';
+import { COMPACT_QUERY, useMediaQuery } from '../lib/useMediaQuery';
 
-function seatPosition(seat: number, selfSeat: number | null, maxSeats: number): CSSProperties {
+/** Arc kept free on each side of the local player on compact screens (degrees). */
+const COMPACT_HERO_GAP = 48;
+
+function seatPosition(seat: number, selfSeat: number | null, maxSeats: number, compact: boolean): CSSProperties {
   const relative = selfSeat === null ? seat : (seat - selfSeat + maxSeats) % maxSeats;
-  const angle = ((90 + relative * (360 / maxSeats)) * Math.PI) / 180;
+
+  if (!compact || selfSeat === null) {
+    const angle = ((90 + relative * (360 / maxSeats)) * Math.PI) / 180;
+    return {
+      left: `${50 + 43 * Math.cos(angle)}%`,
+      top: `${50 + 41 * Math.sin(angle)}%`
+    };
+  }
+
+  // On a narrow table the local player sits at the bottom with full-size cards.
+  // Spread every other seat over the remaining arc so no neighbour covers them.
+  let degrees = 90;
+  if (relative !== 0) {
+    if (maxSeats <= 2) {
+      degrees = 270;
+    } else {
+      const span = 360 - 2 * COMPACT_HERO_GAP;
+      degrees = 90 + COMPACT_HERO_GAP + ((relative - 1) * span) / (maxSeats - 2);
+    }
+  }
+  const angle = (degrees * Math.PI) / 180;
+  const left = 50 + 42 * Math.cos(angle);
+  const top = 50 + 44 * Math.sin(angle);
+  // Keep side seats inside the felt; 9-max seats are narrower (see styles.css).
+  const edge = maxSeats > 6 ? 12 : 15;
   return {
-    left: `${50 + 43 * Math.cos(angle)}%`,
-    top: `${50 + 41 * Math.sin(angle)}%`
+    left: `${Math.min(100 - edge, Math.max(edge, left))}%`,
+    top: `${top}%`
   };
 }
+
+type GuardedAction = 'fold' | 'allin';
+const CONFIRM_WINDOW_MS = 3_000;
 
 function statusLabel(player: TablePlayerState): string | null {
   if (player.status === 'folded') return 'Фолд';
@@ -44,7 +75,10 @@ export function TablePage() {
   const [chatOpen, setChatOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [raiseTo, setRaiseTo] = useState(0);
+  const [sizingOpen, setSizingOpen] = useState(false);
+  const [armed, setArmed] = useState<GuardedAction | null>(null);
   const [now, setNow] = useState(Date.now());
+  const compact = useMediaQuery(COMPACT_QUERY);
   const socketRef = useRef<Socket | null>(null);
   const wasSeated = useRef(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
@@ -71,6 +105,33 @@ export function TablePage() {
     const timer = window.setInterval(() => setNow(Date.now()), 250);
     return () => window.clearInterval(timer);
   }, []);
+
+  // A new decision point (turn passed, next street, next hand) closes the
+  // bet-sizing sheet and disarms any pending fold/all-in confirmation.
+  const decisionKey = `${state?.handId ?? ''}|${state?.street ?? ''}|${isMyTurn}`;
+  useEffect(() => {
+    setSizingOpen(false);
+    setArmed(null);
+  }, [decisionKey]);
+
+  useEffect(() => {
+    if (!armed) return;
+    const timer = window.setTimeout(() => setArmed(null), CONFIRM_WINDOW_MS);
+    return () => window.clearTimeout(timer);
+  }, [armed]);
+
+  // Short buzz when the turn reaches the local player on phones that support it.
+  // Browsers refuse (and log an error) before the first tap on the page.
+  useEffect(() => {
+    if (!isMyTurn || !compact) return;
+    const activation = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation;
+    if (activation && !activation.hasBeenActive) return;
+    try {
+      navigator.vibrate?.(60);
+    } catch {
+      /* vibration is optional */
+    }
+  }, [isMyTurn, compact]);
 
   useEffect(() => {
     if (!token || !id) return;
@@ -189,6 +250,35 @@ export function TablePage() {
     [submitting, toast]
   );
 
+  // All-in, and folding when a free check is available, need a second tap
+  // within a few seconds: on a touch screen these are easy to hit by mistake.
+  function guardedAction(type: GuardedAction) {
+    const needsConfirm = type === 'allin' || (type === 'fold' && Boolean(legal?.canCheck));
+    if (needsConfirm && armed !== type) {
+      setArmed(type);
+      return;
+    }
+    setArmed(null);
+    sendAction(type);
+  }
+
+  function stepRaise(direction: 1 | -1) {
+    const step = state?.table.bigBlind ?? 1;
+    setRaiseTo((value) =>
+      Math.min(aggressiveMax, Math.max(aggressiveMin, (value || aggressiveMin) + direction * step))
+    );
+  }
+
+  function aggressiveAction() {
+    // On phones the first tap opens the sizing sheet; the second one bets.
+    if (compact && !sizingOpen) {
+      setArmed(null);
+      setSizingOpen(true);
+      return;
+    }
+    sendAction(legal!.canBet ? 'bet' : 'raise', raiseTo || aggressiveMin);
+  }
+
   function sendChat(event: FormEvent) {
     event.preventDefault();
     const socket = socketRef.current;
@@ -269,8 +359,8 @@ export function TablePage() {
   return (
     <div className="table-page">
       <div className="table-toolbar">
-        <button className="ghost-button" onClick={() => navigate('/lobby')}>
-          ← Лобби
+        <button className="ghost-button toolbar-back" onClick={() => navigate('/lobby')} aria-label="В лобби">
+          ←{!compact && ' Лобби'}
         </button>
         <div className="table-title">
           <span className="table-league-pill" style={{ borderColor: tableColor, color: tableColor }}>
@@ -282,11 +372,15 @@ export function TablePage() {
           </span>
         </div>
         <div className="table-toolbar-actions">
-          <button className="secondary-button compact" onClick={() => setChatOpen((open) => !open)}>
+          <button
+            className="secondary-button compact"
+            onClick={() => setChatOpen((open) => !open)}
+            aria-expanded={chatOpen}
+          >
             Чат {chat.length > 0 && <em>{chat.length}</em>}
           </button>
           <button className="ghost-button danger" onClick={leaveTable}>
-            Покинуть стол
+            {compact ? 'Выйти' : 'Покинуть стол'}
           </button>
         </div>
       </div>
@@ -301,7 +395,10 @@ export function TablePage() {
           )}
 
           <div className="poker-table-wrap">
-            <div className="poker-table" style={{ '--league-color': tableColor } as CSSProperties}>
+            <div
+              className={`poker-table ${state.table.maxSeats > 6 ? 'seats-9' : 'seats-6'}`}
+              style={{ '--league-color': tableColor } as CSSProperties}
+            >
               <div className="felt-ring" />
               <div className="felt-center">
                 <div className="pot-display">
@@ -350,7 +447,7 @@ export function TablePage() {
                   player={player}
                   self={selfSeat === player.seat}
                   acting={state.actingSeat === player.seat}
-                  position={seatPosition(player.seat, selfSeat, state.table.maxSeats)}
+                  position={seatPosition(player.seat, selfSeat, state.table.maxSeats, compact)}
                   remaining={state.actingSeat === player.seat ? remaining : 0}
                   turnSeconds={turnSeconds}
                   color={tableColor}
@@ -412,22 +509,53 @@ export function TablePage() {
             )}
 
             {state.you?.seated && legal && isMyTurn && (
-              <div className="action-panel">
-                {canAggress && (
+              <div className={`action-panel ${compact && !sizingOpen ? 'sizing-collapsed' : ''}`}>
+                {canAggress && (!compact || sizingOpen) && (
                   <div className="raise-control">
                     <div className="raise-readout">
                       <span>{legal?.canBet ? 'Ставка' : 'Рейз до'}</span>
                       <b>{chips(raiseTo || aggressiveMin)}</b>
+                      {compact && (
+                        <button
+                          type="button"
+                          className="raise-close"
+                          onClick={() => setSizingOpen(false)}
+                          aria-label="Скрыть выбор ставки"
+                        >
+                          ✕
+                        </button>
+                      )}
                     </div>
-                    <input
-                      className="slider"
-                      type="range"
-                      min={aggressiveMin}
-                      max={aggressiveMax}
-                      step={1}
-                      value={raiseTo || aggressiveMin}
-                      onChange={(event) => setRaiseTo(Number(event.target.value))}
-                    />
+                    <div className="raise-slider-row">
+                      <button
+                        type="button"
+                        className="raise-step"
+                        onClick={() => stepRaise(-1)}
+                        disabled={(raiseTo || aggressiveMin) <= aggressiveMin}
+                        aria-label="Уменьшить ставку на большой блайнд"
+                      >
+                        −
+                      </button>
+                      <input
+                        className="slider"
+                        type="range"
+                        min={aggressiveMin}
+                        max={aggressiveMax}
+                        step={1}
+                        value={raiseTo || aggressiveMin}
+                        onChange={(event) => setRaiseTo(Number(event.target.value))}
+                        aria-label="Размер ставки"
+                      />
+                      <button
+                        type="button"
+                        className="raise-step"
+                        onClick={() => stepRaise(1)}
+                        disabled={(raiseTo || aggressiveMin) >= aggressiveMax}
+                        aria-label="Увеличить ставку на большой блайнд"
+                      >
+                        +
+                      </button>
+                    </div>
                     <div className="raise-quick">
                       {[0.5, 1].map((fraction) => {
                         const target = Math.min(
@@ -447,12 +575,12 @@ export function TablePage() {
 
                 <div className="action-buttons">
                   <button
-                    className="action-button fold"
-                    onClick={() => sendAction('fold')}
+                    className={`action-button fold ${armed === 'fold' ? 'is-armed' : ''}`}
+                    onClick={() => guardedAction('fold')}
                     disabled={submitting || !legal?.canFold}
                   >
-                    <span>Фолд</span>
-                    <small>сбросить</small>
+                    <span>{armed === 'fold' ? 'Точно фолд?' : 'Фолд'}</span>
+                    <small>{armed === 'fold' ? 'можно чек бесплатно' : 'сбросить'}</small>
                   </button>
 
                   {legal?.canCheck && (
@@ -479,24 +607,25 @@ export function TablePage() {
 
                   {canAggress && (
                     <button
-                      className="action-button raise"
-                      onClick={() => sendAction(legal!.canBet ? 'bet' : 'raise', raiseTo || aggressiveMin)}
+                      className={`action-button raise ${compact && sizingOpen ? 'is-armed' : ''}`}
+                      onClick={aggressiveAction}
                       disabled={submitting}
                     >
                       <span>
-                        {legal?.canBet ? 'Бет' : 'Рейз'} {chips(raiseTo || aggressiveMin)}
+                        {legal?.canBet ? 'Бет' : 'Рейз'}
+                        {compact && !sizingOpen ? '…' : ` ${chips(raiseTo || aggressiveMin)}`}
                       </span>
-                      <small>увеличить банк</small>
+                      <small>{compact && !sizingOpen ? 'выбрать размер' : 'увеличить банк'}</small>
                     </button>
                   )}
 
                   <button
-                    className="action-button allin"
-                    onClick={() => sendAction('allin')}
+                    className={`action-button allin ${armed === 'allin' ? 'is-armed' : ''}`}
+                    onClick={() => guardedAction('allin')}
                     disabled={submitting || !legal?.canAllIn}
                   >
-                    <span>Олл-ин</span>
-                    <small>{chips(legal?.allInAmount ?? 0)}</small>
+                    <span>{armed === 'allin' ? 'Точно?' : 'Олл-ин'}</span>
+                    <small>{armed === 'allin' ? `ещё раз · ${chips(legal?.allInAmount ?? 0)}` : chips(legal?.allInAmount ?? 0)}</small>
                   </button>
                 </div>
               </div>

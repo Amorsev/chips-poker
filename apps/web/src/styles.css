@@ -132,6 +132,7 @@ h3 {
 .app-shell {
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
   flex-direction: column;
 }
 
@@ -443,6 +444,7 @@ h3 {
 
 .full-loader {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .loader-ring {
@@ -527,6 +529,7 @@ h3 {
   box-shadow: var(--shadow);
   animation: modalIn 0.24s ease both;
   max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
   overflow: auto;
 }
 
@@ -676,6 +679,7 @@ h3 {
 
 .auth-page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   grid-template-columns: minmax(0, 1.06fr) minmax(420px, 0.94fr);
 }
@@ -864,6 +868,7 @@ h3 {
 
 .simple-auth-page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
   padding: 24px;
@@ -2878,6 +2883,7 @@ h3 {
 
   .auth-panel {
     min-height: 100vh;
+    min-height: 100dvh;
   }
 
   .lobby-hero {
@@ -3244,9 +3250,12 @@ h3 {
 }
 
 @media (max-width: 480px) {
-  .league-grid,
-  .stats-grid {
+  .league-grid {
     grid-template-columns: 1fr;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .buyin-summary {
@@ -3301,5 +3310,572 @@ h3 {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* =====================================================================
+   Mobile: touch, safe areas and the full-screen table (plan item М2–М4)
+   Compact breakpoint is kept in sync with COMPACT_QUERY in
+   src/lib/useMediaQuery.ts: (max-width: 760px), (max-height: 520px).
+   ===================================================================== */
+
+button,
+a,
+input,
+select,
+textarea,
+[role='button'] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Lift-on-hover feels broken on touch: the button stays raised after a tap. */
+@media (hover: none) {
+  .action-button:hover:not(:disabled) {
+    transform: none;
+    background: rgba(255, 255, 255, 0.045);
+  }
+
+  .action-button:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+}
+
+/* iOS zooms the page when a focused field is under 16px. */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea,
+  .chat-form input {
+    font-size: 16px !important;
+  }
+
+  /* A 6px track is too thin to grab: keep the look, enlarge the hit area. */
+  .slider {
+    height: 36px;
+    border-radius: 0;
+    background: linear-gradient(90deg, var(--mint-deep), var(--mint)) center / 100% 6px no-repeat;
+  }
+
+  .slider::-webkit-slider-thumb {
+    width: 28px;
+    height: 28px;
+  }
+
+  .slider::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+  }
+
+  /* Touch tablets are wider than the compact breakpoint but still need
+     finger-sized controls. */
+  .raise-quick button,
+  .segmented button {
+    min-height: 40px;
+  }
+
+  .raise-step,
+  .raise-close,
+  .menu-toggle,
+  .icon-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .main-nav a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+/* Between the phone menu and full desktop the topbar ran 3px past the edge. */
+@media (max-width: 980px) {
+  .topbar-inner {
+    gap: 16px;
+  }
+
+  .user-chip-name {
+    display: none;
+  }
+}
+
+/* Notches, rounded corners and the iOS home indicator. */
+.topbar {
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+.page,
+.footer {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+.footer {
+  padding-bottom: calc(30px + env(safe-area-inset-bottom));
+}
+
+.toast-stack {
+  bottom: calc(22px + env(safe-area-inset-bottom));
+}
+
+.action-button.is-armed {
+  border-color: rgba(242, 205, 122, 0.85);
+  box-shadow: 0 0 0 2px rgba(242, 205, 122, 0.25);
+  animation: armedPulse 1s ease-in-out infinite;
+}
+
+.action-button.fold.is-armed {
+  border-color: rgba(240, 124, 124, 0.85);
+  box-shadow: 0 0 0 2px rgba(240, 124, 124, 0.25);
+}
+
+@keyframes armedPulse {
+  50% {
+    box-shadow: 0 0 0 5px rgba(242, 205, 122, 0.08);
+  }
+}
+
+.raise-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.raise-slider-row .slider {
+  flex: 1;
+  min-width: 0;
+}
+
+.raise-step,
+.raise-close {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+
+.raise-close {
+  margin-left: 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.raise-readout b {
+  margin-left: auto;
+}
+
+@media (max-width: 760px) {
+  .toast-stack {
+    bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+
+  /* Comfortable touch targets (44px is the Apple HIG / Material minimum). */
+  .menu-toggle,
+  .icon-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .logo-button {
+    min-height: 44px;
+  }
+
+  .segmented button {
+    min-height: 40px;
+    padding: 9px 14px;
+  }
+
+  .raise-quick button {
+    min-height: 40px;
+  }
+
+  .raise-step,
+  .raise-close {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (max-width: 760px), (max-height: 520px) {
+  /* The table becomes a single game screen: no page footer, no scrolling to
+     reach the action buttons. */
+  .is-table-route .footer,
+  .table-footer-note {
+    display: none;
+  }
+
+  .is-table-route .page {
+    width: calc(100% - 16px);
+    padding-top: 8px;
+    padding-bottom: 0;
+  }
+
+  .table-page {
+    /* 62px topbar + 1px border + 8px page padding */
+    height: calc(100vh - 71px);
+    height: calc(100dvh - 71px - env(safe-area-inset-top));
+    min-height: 520px;
+    margin: 0;
+    gap: 6px;
+  }
+
+  .table-toolbar {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  .table-toolbar .ghost-button,
+  .table-toolbar .secondary-button {
+    min-height: 40px;
+    padding: 8px 12px;
+  }
+
+  .toolbar-back {
+    font-size: 1.1rem;
+    min-width: 44px;
+  }
+
+  .table-title {
+    order: 0;
+    width: auto;
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+
+  .table-title .table-league-pill {
+    display: none;
+  }
+
+  .table-title h1 {
+    max-width: 100%;
+    font-size: 0.86rem;
+  }
+
+  .table-title .small {
+    font-size: 0.68rem;
+    white-space: nowrap;
+  }
+
+  .table-layout,
+  .table-layout.chat-visible {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .poker-stage {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 6px;
+    border-radius: 16px;
+  }
+
+  .poker-table-wrap {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    padding: 24px 0 10px;
+  }
+
+  .poker-table {
+    flex: 1;
+    width: 100%;
+    height: auto;
+    min-height: 280px;
+    aspect-ratio: auto;
+    border-radius: 48% / 34%;
+  }
+
+  .felt-center {
+    inset: 34% 9%;
+  }
+
+  .table-seat.is-self .seat-cards .playing-card {
+    --card-w: 46px;
+  }
+
+  .poker-table.seats-9 .table-seat:not(.is-self) {
+    width: 76px;
+  }
+
+  .poker-table.seats-9 .seat-name {
+    max-width: 34px;
+  }
+
+  .hand-readout {
+    margin: 2px auto 6px;
+  }
+
+  .action-dock {
+    min-height: 0;
+    padding: 2px 0 calc(2px + env(safe-area-inset-bottom));
+  }
+
+  .action-panel {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .raise-control {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+
+  .action-buttons {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  .action-button {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: none;
+    min-height: 56px;
+    padding: 6px 3px;
+  }
+
+  .action-button span {
+    font-size: 0.74rem;
+  }
+
+  .action-button small {
+    font-size: 0.52rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .waiting-action {
+    padding: 14px;
+    font-size: 0.74rem;
+  }
+
+  .rebuy-panel {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  /* Chat slides up as a bottom sheet instead of covering the table side. */
+  .chat-panel {
+    left: 8px;
+    right: 8px;
+    top: auto;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    width: auto;
+    height: min(70vh, 520px);
+    height: min(70dvh, 520px);
+    transform: translateY(calc(100% + 24px));
+    background: rgba(10, 22, 18, 0.97);
+    backdrop-filter: blur(14px);
+  }
+}
+
+/* Phones held sideways: table on the left, decisions on the right. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .is-table-route .topbar {
+    display: none;
+  }
+
+  .is-table-route .page {
+    padding-top: calc(6px + env(safe-area-inset-top));
+  }
+
+  .table-page {
+    height: calc(100vh - 6px);
+    height: calc(100dvh - 6px - env(safe-area-inset-top));
+    min-height: 300px;
+  }
+
+  .poker-stage {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 34%);
+    grid-template-rows: minmax(0, 1fr) auto;
+    column-gap: 10px;
+  }
+
+  /* Room below the felt for the local seat, which hangs off the bottom edge. */
+  .poker-table-wrap {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    padding: 14px 0 40px;
+  }
+
+  .poker-table {
+    min-height: 200px;
+    border-radius: 50% / 46%;
+  }
+
+  .felt-center {
+    inset: 14% 20% 42%;
+    gap: 6px;
+  }
+
+  .table-seat.is-self .seat-cards .playing-card {
+    --card-w: 36px;
+  }
+
+  .hand-readout {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: end;
+  }
+
+  .action-dock {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .action-buttons {
+    flex-wrap: wrap;
+  }
+
+  .action-button {
+    flex: 1 1 calc(50% - 6px);
+    min-height: 46px;
+  }
+
+  .chat-panel {
+    top: 8px;
+    left: auto;
+    width: min(340px, 50vw);
+    height: auto;
+    transform: translateX(calc(100% + 20px));
+  }
+}
+
+/* ---------- Profile and leaderboard on phones ---------- */
+
+/* `1fr` alone is minmax(auto, 1fr): the 680px hands table pushed the whole
+   profile page to 730px wide on a 375px phone. */
+@media (max-width: 1180px) {
+  .profile-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (pointer: coarse) {
+  .league-tabs button {
+    min-height: 40px;
+  }
+
+  /* Inline text links: a bigger hit box without moving the surrounding text. */
+  .auth-page a,
+  .simple-auth-page a {
+    display: inline-block;
+    padding: 12px 6px;
+    margin: -12px -6px;
+  }
+}
+
+@media (max-width: 600px) {
+  /* Recent hands: one card per hand instead of a sideways-scrolling table. */
+  .hands-table-wrap {
+    overflow: visible;
+  }
+
+  .hands-table,
+  .hands-table tbody {
+    display: block;
+    min-width: 0;
+  }
+
+  .hands-table thead {
+    display: none;
+  }
+
+  .hands-table tr {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'table table net'
+      'hole board board'
+      'result result pot';
+    align-items: center;
+    gap: 8px 10px;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .hands-table tr:last-child {
+    border-bottom: 0;
+  }
+
+  .hands-table td {
+    padding: 0;
+    border: 0;
+    min-width: 0;
+  }
+
+  .hands-table td:nth-child(1) { grid-area: table; }
+  .hands-table td:nth-child(2) { grid-area: hole; }
+  .hands-table td:nth-child(3) { grid-area: board; }
+  .hands-table td:nth-child(4) { grid-area: result; display: flex; align-items: center; gap: 8px; }
+  .hands-table td:nth-child(5) { grid-area: pot; justify-self: end; color: var(--muted); }
+  .hands-table td:nth-child(6) { grid-area: net; justify-self: end; font-size: 0.86rem; }
+
+  .hands-table td:nth-child(5)::before {
+    content: 'Банк ';
+  }
+
+  .hands-table td:nth-child(4) .cell-sub {
+    padding: 0;
+  }
+
+  /* Leaderboard: drop the league column so the row fits without scrolling. */
+  .leaderboard-table {
+    overflow-x: visible;
+  }
+
+  .leaderboard-table-head,
+  .leaderboard-row {
+    min-width: 0;
+    grid-template-columns: 30px minmax(0, 1fr) 48px 88px;
+    gap: 8px;
+  }
+
+  .leaderboard-table-head > span:nth-child(3),
+  .leaderboard-row > span:nth-child(3) {
+    display: none;
+  }
+
+  .leader-player {
+    min-width: 0;
+  }
+
+  /* Long e-mails and nicknames must wrap instead of widening the page. */
+  .profile-identity {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .profile-identity > div {
+    min-width: 0;
+  }
+
+  .profile-identity .eyebrow {
+    overflow-wrap: anywhere;
+  }
+
+  .profile-identity h1 {
+    overflow-wrap: anywhere;
   }
 }
